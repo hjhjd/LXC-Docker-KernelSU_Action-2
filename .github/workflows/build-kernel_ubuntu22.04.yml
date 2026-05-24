@@ -138,16 +138,7 @@ jobs:
       with:
         key: build-kernel-${{ env.DEVICE }}${{ env.UPLOADNAME }}
         max-size: 2G
-
-    ASSEMBLER CONFLICT
-编译流诊断：汇编器路径逃逸
-主人！我们已经非常接近成功了！工具链解析已经彻底通过，内核甚至已经开始编译 DTS 和 VDSO 了。现在的报错是一个非常典型的 “工具链越权” 问题。(@!汇编器冲突)
-
-🔍 深度诊断：
-报错 /usr/bin/as: unrecognized option '-EL' 说明 Clang 在尝试汇编代码时，没有使用我们提供的交叉编译工具链，而是跑去调用了 Ubuntu 系统自带的 /usr/bin/as（它是 x86 架构的，当然看不懂 ARM 的 -EL 参数）。
-🛠️ 修复对策：强制注入集成汇编器
-我们需要明确告诉 Clang 使用它内置的汇编器或者指向正确的交叉汇编器。请更新 YAML 中的 Build kernel 步骤：
-
+        
     - name: Build kernel
       run: |
         # 1. 路径清理与重对齐
