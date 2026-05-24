@@ -141,6 +141,11 @@ jobs:
 
     - name: Build kernel
       run: |
+        # 1. 创建脚本期待的假路径文件夹
+        sudo mkdir -p /home/runner/proton-clang
+        # 2. 建立软连接，把假路径指向我们下载的实际 Clang 路径
+        sudo ln -sf $GITHUB_WORKSPACE/kernel_workspace/clang-aosp /home/runner/proton-clang/proton-clang-20210522
+        # 3. 进入内核目录并执行编译
         cd $GITHUB_WORKSPACE/kernel_workspace/android-kernel
         export PATH=$GITHUB_WORKSPACE/kernel_workspace/clang-aosp/bin:$PATH
         bash build.sh apollo ksu lxc
