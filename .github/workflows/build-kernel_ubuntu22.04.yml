@@ -147,19 +147,24 @@ jobs:
         
     - name: Build kernel
       run: |
-        # 1. [必须加回] 建立脚本自检所需的硬编码路径
+        # 1. 建立脚本自检所需的硬编码路径
         sudo mkdir -p /home/runner/proton-clang
         sudo ln -nfsT $GITHUB_WORKSPACE/kernel_workspace/clang-aosp /home/runner/proton-clang/proton-clang-20210522
         
-        # 2. 保留 32 位链接器对齐
+        # 2. 建立所有必要的链接器别名 (解决脚本找不到文件的核心)
         CLANG_BIN=/home/runner/proton-clang/proton-clang-20210522/bin
         GCC32_BIN=$GITHUB_WORKSPACE/kernel_workspace/google_gcc-4.9/arm-linux-androideabi-4.9/bin
+        
+        # 映射 64 位链接器 (必须加回，否则脚本预检报错)
+        sudo ln -sf ${CLANG_BIN}/ld.lld ${CLANG_BIN}/aarch64-linux-gnu-ld
+        
+        # 映射 32 位链接器
         sudo ln -sf ${GCC32_BIN}/arm-linux-androideabi-ld ${GCC32_BIN}/arm-linux-gnueabi-ld
         
         # 3. 环境变量注入
         export PATH=${CLANG_BIN}:${GCC32_BIN}:$GITHUB_WORKSPACE/kernel_workspace/google_gcc-4.9/aarch64-linux-android-4.9/bin:$PATH
         
-        # 4. 执行编译 (Makefile 内部逻辑将解决后续的汇编/警告报错)
+        # 4. 执行编译
         cd $GITHUB_WORKSPACE/kernel_workspace/android-kernel
         bash build.sh apollo ksu lxc
     
