@@ -147,15 +147,19 @@ jobs:
         
     - name: Build kernel
       run: |
-        # 1. 仅保留最基础的路径对齐 (32位链接器仍需此别名作为 Fallback)
-        CLANG_BIN=$GITHUB_WORKSPACE/kernel_workspace/clang-aosp/bin
+        # 1. [必须加回] 建立脚本自检所需的硬编码路径
+        sudo mkdir -p /home/runner/proton-clang
+        sudo ln -nfsT $GITHUB_WORKSPACE/kernel_workspace/clang-aosp /home/runner/proton-clang/proton-clang-20210522
+        
+        # 2. 保留 32 位链接器对齐
+        CLANG_BIN=/home/runner/proton-clang/proton-clang-20210522/bin
         GCC32_BIN=$GITHUB_WORKSPACE/kernel_workspace/google_gcc-4.9/arm-linux-androideabi-4.9/bin
         sudo ln -sf ${GCC32_BIN}/arm-linux-androideabi-ld ${GCC32_BIN}/arm-linux-gnueabi-ld
         
-        # 2. 极简环境变量注入
+        # 3. 环境变量注入
         export PATH=${CLANG_BIN}:${GCC32_BIN}:$GITHUB_WORKSPACE/kernel_workspace/google_gcc-4.9/aarch64-linux-android-4.9/bin:$PATH
         
-        # 3. 直接启动编译 (Makefile 内部已处理 LLVM_IAS 和警告)
+        # 4. 执行编译 (Makefile 内部逻辑将解决后续的汇编/警告报错)
         cd $GITHUB_WORKSPACE/kernel_workspace/android-kernel
         bash build.sh apollo ksu lxc
     
