@@ -141,14 +141,24 @@ jobs:
 
     - name: Build kernel
       run: |
-        # 1. 创建路径并映射 Clang
+        # 1. 创建并对齐 32 位 GCC 的链接器名 (这是解决报错的银弹)
+        # 先确保目标路径存在
+        GCC32_DIR=$GITHUB_WORKSPACE/kernel_workspace/google_gcc-4.9/arm-linux-androideabi-4.9/bin
+        sudo ln -sf ${GCC32_DIR}/arm-linux-androideabi-ld ${GCC32_DIR}/arm-linux-gnueabi-ld
+        
+        # 2. 对齐 Clang/Proton 的路径映射
         sudo mkdir -p /home/runner/proton-clang
         sudo ln -sf $GITHUB_WORKSPACE/kernel_workspace/clang-aosp /home/runner/proton-clang/proton-clang-20210522
-        # 2. 【核心修复】为链接器创建 GNU 别名
-        sudo ln -sf $GITHUB_WORKSPACE/kernel_workspace/clang-aosp/bin/ld.lld $GITHUB_WORKSPACE/kernel_workspace/clang-aosp/bin/aarch64-linux-gnu-ld
-        # 3. 执行编译
+        
+        # 3. 注入环境变量 (包含所有 GCC 和 Clang)
+        export PATH=$GITHUB_WORKSPACE/kernel_workspace/clang-aosp/bin:$GITHUB_WORKSPACE/kernel_workspace/google_gcc-4.9/aarch64-linux-android-4.9/bin:${GCC32_DIR}:$PATH
+        
+        # 4. 设置构建元数据
+        export KBUILD_BUILD_HOST=VCP-Apollo-Base
+        export KBUILD_BUILD_USER=hjhjd
+        
+        # 5. 调用封装脚本执行全量编译 (不再手动执行 make)
         cd $GITHUB_WORKSPACE/kernel_workspace/android-kernel
-        export PATH=$GITHUB_WORKSPACE/kernel_workspace/clang-aosp/bin:$PATH
         bash build.sh apollo ksu lxc
     
     - name: Check a kernel output files
