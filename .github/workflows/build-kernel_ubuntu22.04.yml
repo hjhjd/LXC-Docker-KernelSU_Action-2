@@ -113,6 +113,12 @@ jobs:
     - name: Setup Configuration for Kernel
       run: |
         cd $GITHUB_WORKSPACE/kernel_workspace/android-kernel
+        
+        # 1. [核心修复] 强制锁定集成汇编器 LLVM_IAS=1
+        sed -i 's/ifneq ($(LLVM_IAS),1)/LLVM_IAS := 1\nifneq ($(LLVM_IAS),1)/' Makefile
+        
+        # 2. [核心修复] 禁用导致编译中断的 Clang 警告
+        sed -i '/format-invalid-specifier)/a KBUILD_CFLAGS += $(call cc-disable-warning, gnu-variable-sized-type-not-at-end)\nKBUILD_CFLAGS += $(call cc-disable-warning, unused-function)' Makefile
         if [ ${{ env.ADD_KPROBES_CONFIG }} = true ]; then
             echo "CONFIG_MODULES=y" >> arch/${{ env.ARCH }}/configs/${{ env.KERNEL_CONFIG }}
             echo "CONFIG_KPROBES=y" >> arch/${{ env.ARCH }}/configs/${{ env.KERNEL_CONFIG }}
@@ -141,38 +147,17 @@ jobs:
         
     - name: Build kernel
       run: |
-        # 1. 路径清理与映射
-        sudo rm -rf /home/runner/proton-clang
-        sudo mkdir -p /home/runner/proton-clang
-        CLANG_SRC=$GITHUB_WORKSPACE/kernel_workspace/clang-aosp
-        sudo ln -nfsT ${CLANG_SRC} /home/runner/proton-clang/proton-clang-20210522
-        
-        CLANG_BIN=/home/runner/proton-clang/proton-clang-20210522/bin
-        GCC64_BIN=$GITHUB_WORKSPACE/kernel_workspace/google_gcc-4.9/aarch64-linux-android-4.9/bin
+        # 1. 仅保留最基础的路径对齐 (32位链接器仍需此别名作为 Fallback)
+        CLANG_BIN=$GITHUB_WORKSPACE/kernel_workspace/clang-aosp/bin
         GCC32_BIN=$GITHUB_WORKSPACE/kernel_workspace/google_gcc-4.9/arm-linux-androideabi-4.9/bin
-        
-        # 2. 【全量工具映射】将 GNU 名称指向现代 LLVM 工具 (解决 objdump 缺失和汇编冲突)
-        # 映射 64 位工具链
-        sudo ln -sf ${CLANG_BIN}/ld.lld ${CLANG_BIN}/aarch64-linux-gnu-ld
-        sudo ln -sf ${CLANG_BIN}/llvm-objdump ${CLANG_BIN}/aarch64-linux-gnu-objdump
-        sudo ln -sf ${CLANG_BIN}/llvm-nm ${CLANG_BIN}/aarch64-linux-gnu-nm
-        sudo ln -sf ${CLANG_BIN}/llvm-ar ${CLANG_BIN}/aarch64-linux-gnu-ar
-        sudo ln -sf ${CLANG_BIN}/llvm-readelf ${CLANG_BIN}/aarch64-linux-gnu-readelf
-        
-        # 3. 对齐 32 位链接器 (build.sh 强需求)
         sudo ln -sf ${GCC32_BIN}/arm-linux-androideabi-ld ${GCC32_BIN}/arm-linux-gnueabi-ld
         
-        # 4. 环境变量注入
-        export PATH=${CLANG_BIN}:${GCC64_BIN}:${GCC32_BIN}:$PATH
+        # 2. 极简环境变量注入
+        export PATH=${CLANG_BIN}:${GCC32_BIN}:$GITHUB_WORKSPACE/kernel_workspace/google_gcc-4.9/aarch64-linux-android-4.9/bin:$PATH
         
-        # 【核心修正】：开启集成汇编器 (LLVM_IAS=1) 并注入兼容性参数
-        export KCFLAGS="-Wno-error -Wno-gnu-variable-sized-type-not-at-end -Wno-unused-function -fintegrated-as"
-        export KBUILD_BUILD_HOST=VCP-Apollo-Base
-        export KBUILD_BUILD_USER=hjhjd
-        
-        # 5. 执行编译 (通过参数显式强制 LLVM 集成汇编器)
+        # 3. 直接启动编译 (Makefile 内部已处理 LLVM_IAS 和警告)
         cd $GITHUB_WORKSPACE/kernel_workspace/android-kernel
-        bash build.sh apollo ksu lxc "LLVM_IAS=1"
+        bash build.sh apollo ksu lxc
     
     - name: Check a kernel output files
       run: |
