@@ -141,23 +141,30 @@ jobs:
 
     - name: Build kernel
       run: |
-        # 1. 创建并对齐 32 位 GCC 的链接器名 (这是解决报错的银弹)
-        # 先确保目标路径存在
-        GCC32_DIR=$GITHUB_WORKSPACE/kernel_workspace/google_gcc-4.9/arm-linux-androideabi-4.9/bin
-        sudo ln -sf ${GCC32_DIR}/arm-linux-androideabi-ld ${GCC32_DIR}/arm-linux-gnueabi-ld
-        
-        # 2. 对齐 Clang/Proton 的路径映射
+        # 1. 设置路径变量方便调用
+        CLANG_BIN=$GITHUB_WORKSPACE/kernel_workspace/clang-aosp/bin
+        GCC64_BIN=$GITHUB_WORKSPACE/kernel_workspace/google_gcc-4.9/aarch64-linux-android-4.9/bin
+        GCC32_BIN=$GITHUB_WORKSPACE/kernel_workspace/google_gcc-4.9/arm-linux-androideabi-4.9/bin
+
+        # 2. 对齐 Clang/Proton 的路径映射 (部分内核脚本硬编码了此路径)
         sudo mkdir -p /home/runner/proton-clang
         sudo ln -sf $GITHUB_WORKSPACE/kernel_workspace/clang-aosp /home/runner/proton-clang/proton-clang-20210522
+
+        # 3. 为 64 位和 32 位链接器创建 GNU 格式别名
+        # 映射 64 位 (针对 CLANG_TRIPLE=aarch64-linux-gnu-)
+        sudo ln -sf ${CLANG_BIN}/ld.lld ${CLANG_BIN}/aarch64-linux-gnu-ld
         
-        # 3. 注入环境变量 (包含所有 GCC 和 Clang)
-        export PATH=$GITHUB_WORKSPACE/kernel_workspace/clang-aosp/bin:$GITHUB_WORKSPACE/kernel_workspace/google_gcc-4.9/aarch64-linux-android-4.9/bin:${GCC32_DIR}:$PATH
+        # 映射 32 位 (针对脚本硬编码的 gnueabi 名称)
+        sudo ln -sf ${GCC32_BIN}/arm-linux-androideabi-ld ${GCC32_BIN}/arm-linux-gnueabi-ld
+
+        # 4. 注入完整的环境变量 PATH
+        export PATH=${CLANG_BIN}:${GCC64_BIN}:${GCC32_BIN}:$PATH
         
-        # 4. 设置构建元数据
-        export KBUILD_BUILD_HOST=VCP-Apollo-Base
+        # 5. 设置构建元数据
+        export KBUILD_BUILD_HOST=VCP-Apollo-Lab
         export KBUILD_BUILD_USER=hjhjd
-        
-        # 5. 调用封装脚本执行全量编译 (不再手动执行 make)
+
+        # 6. 执行全量编译
         cd $GITHUB_WORKSPACE/kernel_workspace/android-kernel
         bash build.sh apollo ksu lxc
     
