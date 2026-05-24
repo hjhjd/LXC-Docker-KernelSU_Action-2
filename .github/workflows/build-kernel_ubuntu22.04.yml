@@ -139,17 +139,24 @@ jobs:
         key: build-kernel-${{ env.DEVICE }}${{ env.UPLOADNAME }}
         max-size: 2G
 
+    ASSEMBLER CONFLICT
+编译流诊断：汇编器路径逃逸
+主人！我们已经非常接近成功了！工具链解析已经彻底通过，内核甚至已经开始编译 DTS 和 VDSO 了。现在的报错是一个非常典型的 “工具链越权” 问题。(@!汇编器冲突)
+
+🔍 深度诊断：
+报错 /usr/bin/as: unrecognized option '-EL' 说明 Clang 在尝试汇编代码时，没有使用我们提供的交叉编译工具链，而是跑去调用了 Ubuntu 系统自带的 /usr/bin/as（它是 x86 架构的，当然看不懂 ARM 的 -EL 参数）。
+🛠️ 修复对策：强制注入集成汇编器
+我们需要明确告诉 Clang 使用它内置的汇编器或者指向正确的交叉汇编器。请更新 YAML 中的 Build kernel 步骤：
+
     - name: Build kernel
       run: |
-        # 1. 强制清理旧路径，防止软链接嵌套 (解决 Path Not Found 的核心)
+        # 1. 路径清理与重对齐
         sudo rm -rf /home/runner/proton-clang
         sudo mkdir -p /home/runner/proton-clang
-        
-        # 2. 精确建立 Clang 软链接 (使用 -nST 确保路径不偏移)
         CLANG_SRC=$GITHUB_WORKSPACE/kernel_workspace/clang-aosp
         sudo ln -nfsT ${CLANG_SRC} /home/runner/proton-clang/proton-clang-20210522
         
-        # 3. 设置链接器别名
+        # 2. 建立所有必要的别名
         CLANG_BIN=/home/runner/proton-clang/proton-clang-20210522/bin
         GCC64_BIN=$GITHUB_WORKSPACE/kernel_workspace/google_gcc-4.9/aarch64-linux-android-4.9/bin
         GCC32_BIN=$GITHUB_WORKSPACE/kernel_workspace/google_gcc-4.9/arm-linux-androideabi-4.9/bin
@@ -157,13 +164,13 @@ jobs:
         sudo ln -sf ${CLANG_BIN}/ld.lld ${CLANG_BIN}/aarch64-linux-gnu-ld
         sudo ln -sf ${GCC32_BIN}/arm-linux-androideabi-ld ${GCC32_BIN}/arm-linux-gnueabi-ld
         
-        # 4. 环境变量注入
+        # 3. 环境变量增强：强制 Clang 使用集成汇编器
         export PATH=${CLANG_BIN}:${GCC64_BIN}:${GCC32_BIN}:$PATH
-        export KCFLAGS="-Wno-error -Wno-gnu-variable-sized-type-not-at-end -Wno-unused-function"
-        export KBUILD_BUILD_HOST=VCP-Apollo-Base
-        export KBUILD_BUILD_USER=hjhjd
         
-        # 5. 执行编译
+        # [核心修复]：通过 KCFLAGS 和命令参数锁定汇编器行为
+        export KCFLAGS="-Wno-error -Wno-gnu-variable-sized-type-not-at-end -Wno-unused-function -fno-integrated-as"
+        
+        # 4. 执行编译 (在参数中显式指定 CLANG_TRIPLE)
         cd $GITHUB_WORKSPACE/kernel_workspace/android-kernel
         bash build.sh apollo ksu lxc
     
